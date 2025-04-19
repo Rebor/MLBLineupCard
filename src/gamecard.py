@@ -7,6 +7,7 @@ from apidataclasses import GameInfo, GameMetaData, GameData, LiveData, LiveDataP
 BREAK = "#"*80
 SECTIONBREAK = "#" + "-"*38 + "##" + "-"*38 + "#"
 
+
 class GameCard:
     def __init__(self, gameinfo: dict):
         self.gameinfo: GameInfo = from_dict(GameInfo, gameinfo)
@@ -56,11 +57,7 @@ class GameCard:
         self.header[6] = SECTIONBREAK
 
     def player_entry(self, boxdata: LiveDataPlayer, starting = True):
-        # LiveData
-        # if boxdata.parentTeamId == self.awayteam:
-        # boxname = self.gameData.players[f"ID{boxdata.person.id}"].boxscoreName
         entry = f" {boxdata.jerseyNumber:2}"
-        # entry += f" {boxdata.position.code}"
         entry += f" {self.gameData.players[f'ID{boxdata.person.id}'].boxscoreName}"
         if str(boxdata.position.code) == '1':
             side = self.gameData.players[f'ID{boxdata.person.id}'].pitchHand.code
@@ -77,7 +74,6 @@ class GameCard:
         else:
             entry += ' '*6
 
-        # return self.center(entry, half=True)
         return "#" + entry + "#"
 
     def make_lineup(self):
@@ -92,7 +88,7 @@ class GameCard:
             )
 
     def is_bench(self, player: LiveDataPlayer):
-        lineup = self.awaylineup if player.parentTeamId == self.awayteam else self.homelineup
+        lineup = self.awaylineup if player.parentTeamId == self.awayteam.id else self.homelineup
         return (player.person.id not in lineup) and (int(player.position.code) != 1)
 
     def make_bench(self):
@@ -129,9 +125,11 @@ class GameCard:
 
     def make_bullpens(self):
         self.bullpens = [self.center("Bullpens"), SECTIONBREAK]
-        awaypen = self.liveData.boxscore.teams.away.bullpen
-        homepen = self.liveData.boxscore.teams.home.bullpen
-        for away, home in zip(awaypen, homepen):
+        self.awaypen = self.liveData.boxscore.teams.away.bullpen
+        self.homepen = self.liveData.boxscore.teams.home.bullpen
+
+        # tendayshome = 
+        for away, home in zip(self.awaypen, self.homepen):
             self.bullpens.append(
                 self.player_entry(
                     self.liveData.boxscore.teams.away.players[f"ID{away}"], starting=False
@@ -148,8 +146,7 @@ class GameCard:
         self.make_bench()
         self.make_starters()
         self.make_bullpens()
-        # self.card[0:5] = self.header
-        # self.card[5:5+len(self.lineups)] = self.lineups
+
         self.card = [
             *self.header,
             *self.lineups,
