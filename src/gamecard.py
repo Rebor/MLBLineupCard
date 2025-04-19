@@ -1,8 +1,17 @@
 from typing import List
-from datetime import datetime
+from itertools import zip_longest
+from datetime import datetime, timedelta
 import statsapi
 from dacite import from_dict
-from apidataclasses import GameInfo, GameMetaData, GameData, LiveData, LiveDataPlayer
+from apidataclasses import (
+    GameInfo,
+    GameMetaData,
+    GameData,
+    LiveData,
+    LiveDataPlayer,
+    ScheduleDate,
+    Schedule
+)
 
 BREAK = "#"*80
 SECTIONBREAK = "#" + "-"*38 + "##" + "-"*38 + "#"
@@ -57,22 +66,25 @@ class GameCard:
         self.header[6] = SECTIONBREAK
 
     def player_entry(self, boxdata: LiveDataPlayer, starting = True):
-        entry = f" {boxdata.jerseyNumber:2}"
-        entry += f" {self.gameData.players[f'ID{boxdata.person.id}'].boxscoreName}"
-        if str(boxdata.position.code) == '1':
-            side = self.gameData.players[f'ID{boxdata.person.id}'].pitchHand.code
+        if boxdata:
+            entry = f" {boxdata.jerseyNumber:2}"
+            entry += f" {self.gameData.players[f'ID{boxdata.person.id}'].boxscoreName}"
+            if str(boxdata.position.code) == '1':
+                side = self.gameData.players[f'ID{boxdata.person.id}'].pitchHand.code
+            else:
+                side = self.gameData.players[f'ID{boxdata.person.id}'].batSide.code
+
+                entry += f" ({side})"
+
+            entry += ' ' * ((self.cardwidth // 2) - 8 - len(entry))
+
+            if starting:
+                pos = int(boxdata.position.code) % 10
+                entry += (f"| {pos} | ")
+            else:
+                entry += ' '*6
         else:
-            side = self.gameData.players[f'ID{boxdata.person.id}'].batSide.code
-
-        entry += f" ({side})"
-
-        entry += ' ' * ((self.cardwidth // 2) - 8 - len(entry))
-
-        if starting:
-            pos = int(boxdata.position.code) % 10
-            entry += (f"| {pos} | ")
-        else:
-            entry += ' '*6
+            entry = ' '*((self.cardwidth // 2) - 2)
 
         return "#" + entry + "#"
 
@@ -123,19 +135,90 @@ class GameCard:
             )
         )
 
+    def get_prob_pitchers(self, scheduledate: ScheduleDate, team_id: int):
+        pitchers = []
+        for game in scheduledate.games:
+            if game.teams.away.team.id == team_id:
+                if pitcher := game.teams.away.probablePitcher:
+                    pitchers.append(pitcher.id)
+            else:
+                if pitcher := game.teams.home.probablePitcher:
+                    pitchers.append(pitcher.id)
+        return pitchers
+
     def make_bullpens(self):
         self.bullpens = [self.center("Bullpens"), SECTIONBREAK]
         self.awaypen = self.liveData.boxscore.teams.away.bullpen
         self.homepen = self.liveData.boxscore.teams.home.bullpen
 
-        # tendayshome = 
-        for away, home in zip(self.awaypen, self.homepen):
+        today = datetime.now()
+        awayten = from_dict(
+            Schedule,
+            statsapi.get(
+                'schedule',
+                params={
+                    'sportId':1,
+                    'teamId': self.awayteam.id,
+                    'startDate': (today - timedelta(days=10)).strftime("%Y-%m-%d"),
+                    'endDate': (today + timedelta(days=10)).strftime("%Y-%m-%d"),
+                    'hydrate': 'probablePitcher'
+                }
+            )
+        )
+        hometen = from_dict(
+            Schedule,
+            statsapi.get(
+                'schedule',
+                params={
+                    'sportId': 1,
+                    'teamId': self.hometeam.id,
+                    'startDate': (today - timedelta(days=10)).strftime("%Y-%m-%d"),
+                    'endDate': (today + timedelta(days=10)).strftime("%Y-%m-%d"),
+                    'hydrate': 'probablePitcher'
+                }
+            )
+        )
+        awaystarters = set(
+            [
+                p
+                for date in awayten.dates
+                for p in self.get_prob_pitchers(date, self.awayteam.id)
+            ]
+        )
+        homestarters = set(
+            [
+                p
+                for date in hometen.dates
+                for p in self.get_prob_pitchers(date, self.hometeam.id)
+            ]
+        )
+
+        awaynonstarters = set(self.awaypen) - awaystarters
+        homenonstarters = set(self.homepen) - homestarters
+
+        for away, home in zip_longest(awaynonstarters, homenonstarters):
             self.bullpens.append(
                 self.player_entry(
-                    self.liveData.boxscore.teams.away.players[f"ID{away}"], starting=False
+                    self.liveData.boxscore.teams.away.players.get(f"ID{away}", None), starting=False
                 ) +
                 self.player_entry(
-                    self.liveData.boxscore.teams.home.players[f"ID{home}"], starting=False
+                    self.liveData.boxscore.teams.home.players.get(f"ID{home}", None), starting=False
+                )
+            )
+
+        # print(awaystarters)
+        # print(homestarters)
+        activeawaystarters = set(self.awaypen).intersection(awaystarters)
+        activehomestarters = set(self.homepen).intersection(homestarters)
+        self.bullpens.extend([SECTIONBREAK, self.center("Other Pitchers"), SECTIONBREAK])
+        for away, home in zip_longest(activeawaystarters, activehomestarters):
+            print(away, home)
+            self.bullpens.append(
+                self.player_entry(
+                    self.liveData.boxscore.teams.away.players.get(f"ID{away}", None), starting=False
+                ) +
+                self.player_entry(
+                    self.liveData.boxscore.teams.home.players.get(f"ID{home}", None), starting=False
                 )
             )
 
@@ -156,7 +239,7 @@ class GameCard:
             *self.starters,
             SECTIONBREAK,
             *self.bullpens,
-            SECTIONBREAK,
+            # SECTIONBREAK,
             BREAK
         ]
 
@@ -167,9 +250,12 @@ class GameCard:
             print(line + "\n", end='')
 
 if __name__ == "__main__":
-    gameinfo = statsapi.get('game', {'gamePk': 778470})
+    # next_game = statsapi.next_game(111)
+    todays_game = statsapi.schedule(team=111)[0]['game_id']
+    #778470
+    print(todays_game)
+    gameinfo = statsapi.get('game', {'gamePk': todays_game})
     gamecard = GameCard(gameinfo)
     # print(gamecard.gameData.venue.name)
     gamecard.assemble_card()
     gamecard.print_card()
-    

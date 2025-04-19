@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -132,10 +133,43 @@ class LiveDataBoxscore:
 class LiveData:
     boxscore: LiveDataBoxscore
 
-
 @dataclass
 class GameInfo:
     gamePk: int
     metaData: GameMetaData
     gameData: GameData
     liveData: LiveData
+
+@dataclass
+class ScheduleTeamInfo:
+    id: int
+    name: str
+
+@dataclass
+class ProbablePitcher:
+    id: int
+    fullName: str
+
+@dataclass
+class ScheduleTeam:
+    team: ScheduleTeamInfo
+    probablePitcher: Optional[ProbablePitcher]
+
+@dataclass
+class ScheduleTeams:
+    away: ScheduleTeam
+    home: ScheduleTeam
+
+@dataclass
+class ScheduleGame:
+    gamePk: int
+    teams: ScheduleTeams
+
+@dataclass
+class ScheduleDate:
+    date: str
+    games: list[ScheduleGame]
+
+@dataclass
+class Schedule:
+    dates: list[ScheduleDate]
