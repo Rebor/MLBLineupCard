@@ -62,7 +62,12 @@ class GameCard:
         entry = f" {boxdata.jerseyNumber:2}"
         # entry += f" {boxdata.position.code}"
         entry += f" {self.gameData.players[f'ID{boxdata.person.id}'].boxscoreName}"
-        entry += f" ({self.gameData.players[f"ID{boxdata.person.id}"].batSide.code})"
+        if str(boxdata.position.code) == '1':
+            side = self.gameData.players[f'ID{boxdata.person.id}'].pitchHand.code
+        else:
+            side = self.gameData.players[f'ID{boxdata.person.id}'].batSide.code
+
+        entry += f" ({side})"
 
         entry += ' ' * ((self.cardwidth // 2) - 8 - len(entry))
 
@@ -109,11 +114,40 @@ class GameCard:
                 + self.player_entry(home, starting=False)
             )
 
+    def make_starters(self):
+        self.starters = [self.center("Starters"), SECTIONBREAK]
+        awaystarter = self.liveData.boxscore.teams.away.pitchers[0]
+        homestarter = self.liveData.boxscore.teams.home.pitchers[0]
+        self.starters.append(
+            self.player_entry(
+                self.liveData.boxscore.teams.away.players[f'ID{awaystarter}'], starting=False
+            ) +
+            self.player_entry(
+                self.liveData.boxscore.teams.home.players[f'ID{homestarter}'], starting=False
+            )
+        )
+
+    def make_bullpens(self):
+        self.bullpens = [self.center("Bullpens"), SECTIONBREAK]
+        awaypen = self.liveData.boxscore.teams.away.bullpen
+        homepen = self.liveData.boxscore.teams.home.bullpen
+        for away, home in zip(awaypen, homepen):
+            self.bullpens.append(
+                self.player_entry(
+                    self.liveData.boxscore.teams.away.players[f"ID{away}"], starting=False
+                ) +
+                self.player_entry(
+                    self.liveData.boxscore.teams.home.players[f"ID{home}"], starting=False
+                )
+            )
+
+
     def assemble_card(self):
         self.make_header()
         self.make_lineup()
         self.make_bench()
-
+        self.make_starters()
+        self.make_bullpens()
         # self.card[0:5] = self.header
         # self.card[5:5+len(self.lineups)] = self.lineups
         self.card = [
@@ -121,7 +155,12 @@ class GameCard:
             *self.lineups,
             SECTIONBREAK,
             *self.benches,
-            SECTIONBREAK
+            SECTIONBREAK,
+            *self.starters,
+            SECTIONBREAK,
+            *self.bullpens,
+            SECTIONBREAK,
+            BREAK
         ]
 
     def print_card(self):
