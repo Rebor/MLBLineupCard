@@ -74,7 +74,7 @@ class GameCard:
             else:
                 side = self.gameData.players[f'ID{boxdata.person.id}'].batSide.code
 
-                entry += f" ({side})"
+            entry += f" ({side})"
 
             entry += ' ' * ((self.cardwidth // 2) - 8 - len(entry))
 
@@ -212,7 +212,7 @@ class GameCard:
         activehomestarters = set(self.homepen).intersection(homestarters)
         self.bullpens.extend([SECTIONBREAK, self.center("Other Pitchers"), SECTIONBREAK])
         for away, home in zip_longest(activeawaystarters, activehomestarters):
-            print(away, home)
+            # print(away, home)
             self.bullpens.append(
                 self.player_entry(
                     self.liveData.boxscore.teams.away.players.get(f"ID{away}", None), starting=False
@@ -222,6 +222,23 @@ class GameCard:
                 )
             )
 
+    def make_umpires(self):
+        officials = self.liveData.boxscore.officials
+
+        self.umpires = [self.center("Umpires"), SECTIONBREAK]
+        hp = [official.official.fullName for official in officials if official.officialType == 'Home Plate'][0]
+        fb = [official.official.fullName for official in officials if official.officialType == 'First Base'][0]
+        sb = [official.official.fullName for official in officials if official.officialType == 'Second Base'][0]
+        tb = [official.official.fullName for official in officials if official.officialType == 'Third Base'][0]
+
+        self.umpires.extend(
+            [
+                self.center(f"Home: {hp.split(' ')[-1]}", half=True) +
+                self.center(f"First: {fb.split(' ')[-1]}", half=True),
+                self.center(f"Second: {sb.split(' ')[-1]}", half=True) +
+                self.center(f"Third: {tb.split(' ')[-1]}", half=True)
+            ]
+        )
 
     def assemble_card(self):
         self.make_header()
@@ -229,6 +246,7 @@ class GameCard:
         self.make_bench()
         self.make_starters()
         self.make_bullpens()
+        self.make_umpires()
 
         self.card = [
             *self.header,
@@ -239,7 +257,8 @@ class GameCard:
             *self.starters,
             SECTIONBREAK,
             *self.bullpens,
-            # SECTIONBREAK,
+            SECTIONBREAK,
+            *self.umpires,
             BREAK
         ]
 
@@ -253,7 +272,7 @@ if __name__ == "__main__":
     # next_game = statsapi.next_game(111)
     todays_game = statsapi.schedule(team=111)[0]['game_id']
     #778470
-    print(todays_game)
+    # print(todays_game)
     gameinfo = statsapi.get('game', {'gamePk': todays_game})
     gamecard = GameCard(gameinfo)
     # print(gamecard.gameData.venue.name)
